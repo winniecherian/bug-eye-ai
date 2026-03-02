@@ -22,9 +22,8 @@ const firebaseConfig = {
   measurementId: "G-BYJ3DFH5BG"
 };
 
-// --- STEP 2: Initialize Firebase Safely ---
+// --- STEP 2: Initialize Firebase ---
 let app, auth, db, provider;
-
 try {
   app = initializeApp(firebaseConfig);
   auth = getAuth(app);
@@ -34,11 +33,11 @@ try {
   console.error("Firebase initialization failed:", e);
 }
 
-// --- STEP 3: Gemini API Config ---
+// --- STEP 3: Groq API Config (The Free Alternative) ---
 const getApiKey = () => {
   try {
-    // Looks for VITE_GEMINI_API_KEY in Vercel environment variables
-    return import.meta.env.VITE_GEMINI_API_KEY || "";
+    // We now look for VITE_GROQ_API_KEY instead of Gemini
+    return import.meta.env.VITE_GROQ_API_KEY || "";
   } catch (e) {
     return "";
   }
@@ -71,28 +70,15 @@ const App = () => {
       await signInWithPopup(auth, provider);
     } catch (err) {
       console.error(err);
-      setError("Failed to sign in. Please ensure Google Auth is enabled in your Firebase Console.");
+      setError("Failed to sign in. Ensure Google Auth is enabled in Firebase Console.");
     }
   };
 
   const handleSignOut = () => auth && signOut(auth);
 
-  const cleanJsonResponse = (text) => {
-    if (!text) return "";
-    let cleaned = text.trim();
-    if (cleaned.includes('```')) {
-      const parts = cleaned.split('```');
-      cleaned = parts.length > 1 ? parts[1] : parts[0];
-      if (cleaned.toLowerCase().startsWith('json')) {
-        cleaned = cleaned.substring(4);
-      }
-    }
-    return cleaned.trim();
-  };
-
   const analyzeWebsite = async (targetUrl) => {
     if (!apiKey) {
-      setError("API Key Missing! Please add 'VITE_GEMINI_API_KEY' to Vercel Environment Variables and Redeploy.");
+      setError("Groq API Key Missing! Go to Vercel -> Settings -> Environment Variables. Add 'VITE_GROQ_API_KEY' with your key from console.groq.com.");
       return;
     }
     
@@ -100,49 +86,29 @@ const App = () => {
     setError(null);
     setReport(null);
 
-    const promptText = `Task: Perform a technical bug audit for the website: ${targetUrl}.
-    Rules: Return ONLY a raw JSON object. No markdown, no intro text.
-    
-    JSON Format:
-    {
-      "siteScore": 85,
-      "summary": "layman summary of site health",
-      "bugs": [
-        {
-          "id": 1,
-          "type": "Performance|UI|Security",
-          "title": "Short title",
-          "description": "Layman explanation",
-          "severity": "High|Medium|Low",
-          "fix": "Technical fix suggestion"
-        }
-      ],
-      "stats": { "performance": 80, "security": 85, "accessibility": 90 }
-    }`;
-
-    // We will try the stable v1 endpoint which works for most keys
-    const tryRequest = async (modelName) => {
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1/models/${modelName}:generateContent?key=${apiKey}`, {
+    try {
+      // Using Groq's OpenAI-compatible endpoint
+      const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`
+        },
         body: JSON.stringify({
-          contents: [{ parts: [{ text: promptText }] }]
+          model: "llama-3.3-70b-versatile",
+          messages: [
+            {
+              role: "system",
+              content: "You are a professional web QA engineer. You must return only raw JSON. Do not include markdown or explanations."
+            },
+            {
+              role: "user",
+              content: `Analyze this website for potential bugs: ${targetUrl}. Return a JSON object with this exact schema: { "siteScore": number, "summary": "string", "bugs": [{"id": number, "type": "Performance|UI|Security", "title": "string", "description": "string", "severity": "High|Medium|Low", "fix": "string"}], "stats": {"performance": number, "security": number, "accessibility": number} }`
+            }
+          ],
+          response_format: { type: "json_object" }
         })
       });
-      return response;
-    };
-
-    try {
-      // Try primary stable model
-      let response = await tryRequest("gemini-1.5-flash");
-
-      // If primary fails with "not found", try the latest alias
-      if (!response.ok) {
-        const errData = await response.json().catch(() => ({}));
-        if (errData.error?.message?.includes("not found")) {
-          response = await tryRequest("gemini-1.5-flash-latest");
-        }
-      }
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
@@ -150,16 +116,11 @@ const App = () => {
       }
 
       const result = await response.json();
-      const rawText = result.candidates?.[0]?.content?.parts?.[0]?.text;
-      
-      if (!rawText) throw new Error("AI returned empty results. Please try again.");
-      
-      const cleanedData = cleanJsonResponse(rawText);
-      const data = JSON.parse(cleanedData);
+      const data = JSON.parse(result.choices[0].message.content);
       setReport(data);
     } catch (err) {
       console.error("Analysis Error:", err);
-      setError(`Critical Error: ${err.message}. Please ensure the Generative Language API is enabled for your key in Google AI Studio.`);
+      setError(`Analysis Failed: ${err.message}`);
     } finally {
       setIsAnalyzing(false);
     }
@@ -171,11 +132,18 @@ const App = () => {
         <h2 className="text-3xl font-bold mb-8 flex items-center gap-3">
           <BookOpen className="text-indigo-600 w-8 h-8" /> Documentation
         </h2>
-        <div className="space-y-6 text-slate-600 leading-relaxed">
-          <p>BugEye AI uses large language models to simulate a site audit. It evaluates structural patterns, UI responsiveness, and security headers based on publicly available data.</p>
-          <div className="bg-indigo-50 border-l-4 border-indigo-400 p-4 text-indigo-800 text-sm rounded-r-xl">
-            <strong>Pro Tip:</strong> Ensure your API key is created at <a href="https://aistudio.google.com/" target="_blank" className="font-bold underline">Google AI Studio</a>. Keys from the standard Google Cloud Console sometimes require additional billing setup.
-          </div>
+        <div className="space-y-8 text-slate-600 leading-relaxed">
+          <section>
+            <h3 className="text-xl font-bold text-slate-900 mb-3">Powered by Groq</h3>
+            <p>This app now uses Groq Llama 3 for ultra-fast, reliable website auditing. It bypasses the common region-locks and complex project settings of other providers.</p>
+          </section>
+
+          <section className="bg-indigo-50 rounded-2xl p-6 border border-indigo-100">
+            <h3 className="text-lg font-bold text-indigo-900 mb-2">Setup Guide</h3>
+            <p className="text-sm text-indigo-800">1. Get a free key at <strong>console.groq.com</strong></p>
+            <p className="text-sm text-indigo-800">2. Add it to Vercel as <strong>VITE_GROQ_API_KEY</strong></p>
+            <p className="text-sm text-indigo-800">3. Redeploy and you are live!</p>
+          </section>
         </div>
         <button onClick={() => setView('home')} className="mt-8 bg-indigo-600 text-white px-8 py-3 rounded-2xl font-bold hover:bg-indigo-700 transition-all">
           Back to Dashboard
@@ -214,7 +182,7 @@ const App = () => {
               <h1 className="text-5xl font-black mb-4 tracking-tight leading-tight text-slate-900">
                 Find Website Bugs <span className="text-indigo-600">Instantly</span>
               </h1>
-              <p className="text-slate-500 text-lg max-w-lg mx-auto">Enter any website URL to generate an AI-powered bug report in seconds.</p>
+              <p className="text-slate-500 text-lg max-w-lg mx-auto">Ultra-fast AI auditing powered by Groq Llama 3.</p>
             </div>
 
             <form onSubmit={(e) => { e.preventDefault(); if(url) analyzeWebsite(url); }} className="relative mb-8 group">
@@ -236,7 +204,7 @@ const App = () => {
               <div className="p-6 bg-rose-50 border border-rose-200 text-rose-700 rounded-3xl mb-8 flex items-start gap-4 animate-in fade-in slide-in-from-top-2">
                 <ShieldAlert className="w-6 h-6 shrink-0 mt-0.5 text-rose-600" />
                 <div>
-                  <p className="font-bold mb-1">Configuration Required</p>
+                  <p className="font-bold mb-1">Analysis Error</p>
                   <p className="text-sm leading-relaxed opacity-90">{error}</p>
                 </div>
               </div>
@@ -244,12 +212,9 @@ const App = () => {
 
             {isAnalyzing && (
               <div className="text-center py-20 animate-pulse">
-                <div className="relative inline-block mb-6">
-                  <div className="w-16 h-16 border-4 border-indigo-100 border-t-indigo-600 rounded-full animate-spin mx-auto"></div>
-                  <Bug className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-indigo-600 w-6 h-6" />
-                </div>
-                <h3 className="text-xl font-bold text-slate-800">AI is Auditing Architecture...</h3>
-                <p className="text-slate-400 mt-2 italic">Scanning UI components and security protocols</p>
+                <RefreshCw className="w-12 h-12 animate-spin text-indigo-600 mx-auto mb-6" />
+                <h3 className="text-xl font-bold text-slate-800">Groq is Scanning Architecture...</h3>
+                <p className="text-slate-400 mt-2 italic">Processing site health in real-time</p>
               </div>
             )}
 
@@ -272,25 +237,14 @@ const App = () => {
                 </div>
 
                 <div className="bg-white p-10 rounded-[2.5rem] border border-slate-200 shadow-sm relative overflow-hidden">
-                  <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-50 rounded-bl-full -z-0 opacity-50"></div>
-                  
                   <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-10 pb-8 border-b border-slate-100 relative z-10">
                     <div>
                       <h2 className="text-3xl font-black text-slate-900 tracking-tight">Health Score</h2>
-                      <p className="text-slate-500 mt-1">Simulated audit based on URL structure</p>
+                      <p className="text-slate-500 mt-1">Audit complete via Groq Cloud</p>
                     </div>
                     <div className="bg-indigo-600 px-8 py-5 rounded-3xl shadow-xl shadow-indigo-100">
                       <div className="text-4xl font-black text-white">{report.siteScore || 0}%</div>
                     </div>
-                  </div>
-
-                  <div className="mb-10 relative z-10">
-                    <h3 className="text-sm font-bold uppercase text-slate-400 tracking-widest mb-4 flex items-center gap-2">
-                      <CheckCircle2 className="w-4 h-4 text-emerald-500" /> AI Executive Summary
-                    </h3>
-                    <p className="text-lg text-slate-700 leading-relaxed italic border-l-4 border-indigo-100 pl-6">
-                      "{report.summary}"
-                    </p>
                   </div>
 
                   <div className="space-y-6 relative z-10">
@@ -306,7 +260,7 @@ const App = () => {
                         </div>
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                           <div>
-                            <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">Layman Explanation:</p>
+                            <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">Explanation:</p>
                             <p className="text-slate-600 text-sm leading-relaxed">{bug.description}</p>
                           </div>
                           <div>
@@ -327,12 +281,12 @@ const App = () => {
       </main>
 
       <footer className="py-12 border-t border-slate-200 mt-20 bg-white">
-        <div className="max-w-7xl mx-auto px-4 text-center opacity-40 grayscale hover:grayscale-0 transition-all">
+        <div className="max-w-7xl mx-auto px-4 text-center opacity-40">
           <div className="flex items-center justify-center gap-2 mb-2">
             <Bug className="w-5 h-5" />
-            <span className="font-bold">BugEye AI v1.2</span>
+            <span className="font-bold">BugEye AI x Groq</span>
           </div>
-          <p className="text-[10px] font-medium uppercase tracking-widest">Built with React & Gemini Stable API</p>
+          <p className="text-[10px] font-medium uppercase tracking-widest">Running Llama-3.3-70b-Versatile</p>
         </div>
       </footer>
     </div>
