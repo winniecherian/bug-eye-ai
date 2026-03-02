@@ -93,7 +93,8 @@ const App = () => {
     setReport(null);
 
     try {
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
+      // Switched to gemini-1.5-flash for broader public API compatibility
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -172,7 +173,7 @@ const App = () => {
         {view === 'docs' ? <Documentation /> : (
           <div className="max-w-4xl mx-auto">
             <div className="text-center mb-12">
-              <h1 className="text-5xl font-black mb-4 tracking-tight leading-tight">
+              <h1 className="text-5xl font-black mb-4 tracking-tight leading-tight text-slate-900">
                 Find Website Bugs <span className="text-indigo-600">Instantly</span>
               </h1>
               <p className="text-slate-500 text-lg">Enter a URL to generate a comprehensive AI-powered bug report.</p>
@@ -206,7 +207,7 @@ const App = () => {
             {isAnalyzing && (
               <div className="text-center py-20 animate-pulse">
                 <RefreshCw className="w-12 h-12 animate-spin text-indigo-600 mx-auto mb-6" />
-                <h3 className="text-xl font-bold">Scanning Site Architecture...</h3>
+                <h3 className="text-xl font-bold text-slate-800">Scanning Site Architecture...</h3>
                 <p className="text-slate-400 mt-2">Checking UI elements and security headers</p>
               </div>
             )}
@@ -222,7 +223,7 @@ const App = () => {
                     <div key={idx} className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
                       <div className="flex items-center justify-between mb-2">
                         <stat.icon className={`w-5 h-5 ${stat.color}`} />
-                        <span className="text-2xl font-black">{stat.val}%</span>
+                        <span className="text-2xl font-black text-slate-900">{stat.val}%</span>
                       </div>
                       <p className="text-slate-500 text-sm font-bold uppercase tracking-wider">{stat.label}</p>
                     </div>
@@ -240,7 +241,7 @@ const App = () => {
                     </div>
                   </div>
 
-                  <div className="space-y-6">
+                  <div className="space-y-6 text-slate-900">
                     {report.bugs?.map((bug, i) => (
                       <div key={i} className="p-8 bg-slate-50 rounded-[2rem] border border-slate-100 hover:border-indigo-200 transition-colors group">
                         <div className="flex flex-col md:flex-row justify-between items-start mb-6 gap-4">
