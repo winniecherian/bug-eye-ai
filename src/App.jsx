@@ -79,6 +79,7 @@ const App = () => {
 
   // Helper to clean AI response (removes markdown code blocks if present)
   const cleanJsonResponse = (text) => {
+    if (!text) return "";
     return text.replace(/```json/g, '').replace(/```/g, '').trim();
   };
 
@@ -93,13 +94,20 @@ const App = () => {
     setReport(null);
 
     try {
-      // Switched to gemini-1.5-flash for broader public API compatibility
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
+      // Switched to the V1 STABLE endpoint for maximum compatibility with all API keys
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          contents: [{ parts: [{ text: `Analyze this website for bugs: ${targetUrl}` }] }],
-          systemInstruction: { parts: [{ text: "You are a professional QA engineer. Return a valid JSON object ONLY. No conversational text. Schema: { \"siteScore\": number, \"summary\": \"string\", \"bugs\": [{\"id\": number, \"type\": \"string\", \"title\": \"string\", \"description\": \"string\", \"severity\": \"High|Medium|Low\", \"fix\": \"string\"}], \"stats\": {\"performance\": number, \"security\": number, \"accessibility\": number} }" }] },
+          contents: [
+            { 
+              role: "user",
+              parts: [{ text: `Analyze this website for bugs: ${targetUrl}` }] 
+            }
+          ],
+          systemInstruction: { 
+            parts: [{ text: "You are a professional QA engineer. Return a valid JSON object ONLY. Schema: { \"siteScore\": number, \"summary\": \"string\", \"bugs\": [{\"id\": number, \"type\": \"string\", \"title\": \"string\", \"description\": \"string\", \"severity\": \"High|Medium|Low\", \"fix\": \"string\"}], \"stats\": {\"performance\": number, \"security\": number, \"accessibility\": number} }" }] 
+          },
           generationConfig: { 
             responseMimeType: "application/json"
           }
@@ -108,7 +116,9 @@ const App = () => {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error?.message || `API Error: ${response.status}`);
+        // Improved error reporting for better debugging
+        const msg = errorData.error?.message || `API Error: ${response.status}`;
+        throw new Error(msg);
       }
 
       const result = await response.json();
@@ -121,7 +131,7 @@ const App = () => {
       setReport(data);
     } catch (err) {
       console.error("Analysis Error:", err);
-      setError(`Analysis failed: ${err.message}. Please check if your Gemini API key is active and correctly added to Vercel.`);
+      setError(`Analysis failed: ${err.message}. If you just added your API key to Vercel, please wait 1 minute and re-deploy.`);
     } finally {
       setIsAnalyzing(false);
     }
@@ -136,7 +146,7 @@ const App = () => {
         <div className="space-y-6 text-slate-600">
           <p>BugEye AI simulates a technical audit by analyzing common architectural patterns and potential vulnerabilities based on standard web practices.</p>
           <div className="bg-amber-50 border-l-4 border-amber-400 p-4 text-amber-800 text-sm rounded-r-lg">
-            <strong>Deployment Note:</strong> If you just added the API key to Vercel, you <strong>must</strong> re-deploy your project for the changes to take effect.
+            <strong>Troubleshooting Tip:</strong> If analysis fails, go to <a href="https://aistudio.google.com/" target="_blank" className="underline font-bold">Google AI Studio</a> and make sure your API key is active.
           </div>
         </div>
         <button onClick={() => setView('home')} className="mt-8 bg-indigo-600 text-white px-8 py-3 rounded-2xl font-bold hover:bg-indigo-700 transition-all">
@@ -198,8 +208,8 @@ const App = () => {
               <div className="p-6 bg-rose-50 border border-rose-200 text-rose-700 rounded-3xl mb-8 flex items-start gap-4 animate-in fade-in slide-in-from-top-2">
                 <ShieldAlert className="w-6 h-6 shrink-0 mt-0.5" />
                 <div>
-                  <p className="font-bold mb-1">Analysis Failed</p>
-                  <p className="text-sm opacity-90">{error}</p>
+                  <p className="font-bold mb-1 text-rose-800">Analysis Failed</p>
+                  <p className="text-sm leading-relaxed">{error}</p>
                 </div>
               </div>
             )}
@@ -259,7 +269,7 @@ const App = () => {
                           </div>
                           <div>
                             <p className="text-xs font-bold text-indigo-400 uppercase tracking-widest mb-3">Fix Suggestion:</p>
-                            <div className="bg-slate-900 text-slate-300 p-4 rounded-xl font-mono text-xs whitespace-pre-wrap">
+                            <div className="bg-slate-900 text-slate-300 p-4 rounded-xl font-mono text-xs whitespace-pre-wrap overflow-x-auto">
                               {bug.fix}
                             </div>
                           </div>
