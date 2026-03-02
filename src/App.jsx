@@ -38,7 +38,6 @@ try {
 const getApiKey = () => {
   try {
     // Looks for VITE_GEMINI_API_KEY in Vercel environment variables
-    // On your local computer, you can create a .env file with VITE_GEMINI_API_KEY=your_key
     return import.meta.env.VITE_GEMINI_API_KEY || "";
   } catch (e) {
     return "";
@@ -78,14 +77,13 @@ const App = () => {
 
   const handleSignOut = () => auth && signOut(auth);
 
-  // Helper to clean AI response (handles all formats: plain JSON or Markdown blocks)
   const cleanJsonResponse = (text) => {
     if (!text) return "";
-    let cleaned = text;
-    // Remove Markdown code blocks if the AI added them
+    let cleaned = text.trim();
     if (cleaned.includes('```')) {
-      cleaned = cleaned.split('```')[1];
-      if (cleaned.startsWith('json')) {
+      const parts = cleaned.split('```');
+      cleaned = parts.length > 1 ? parts[1] : parts[0];
+      if (cleaned.toLowerCase().startsWith('json')) {
         cleaned = cleaned.substring(4);
       }
     }
@@ -94,7 +92,7 @@ const App = () => {
 
   const analyzeWebsite = async (targetUrl) => {
     if (!apiKey) {
-      setError("API Key Missing! Go to Vercel -> Settings -> Environment Variables. Add 'VITE_GEMINI_API_KEY' with your key, then click 'Redeploy' in the Deployments tab.");
+      setError("API Key Missing! Please add 'VITE_GEMINI_API_KEY' to Vercel Environment Variables and Redeploy.");
       return;
     }
     
@@ -102,42 +100,49 @@ const App = () => {
     setError(null);
     setReport(null);
 
-    // This prompt is designed to be "Bulletproof" - it works on all Gemini versions
-    const promptText = `Analyze this website for bugs: ${targetUrl}. 
-    Return the result as a raw JSON object only. Do not include any introductory text.
+    const promptText = `Task: Perform a technical bug audit for the website: ${targetUrl}.
+    Rules: Return ONLY a raw JSON object. No markdown, no intro text.
     
-    JSON Schema:
+    JSON Format:
     {
       "siteScore": 85,
-      "summary": "A short summary for a non-technical person",
+      "summary": "layman summary of site health",
       "bugs": [
         {
           "id": 1,
-          "type": "Performance",
-          "title": "Slow Loading Images",
-          "description": "The images are too large for mobile users.",
-          "severity": "High",
-          "fix": "Use a tool like TinyPNG to compress your images."
+          "type": "Performance|UI|Security",
+          "title": "Short title",
+          "description": "Layman explanation",
+          "severity": "High|Medium|Low",
+          "fix": "Technical fix suggestion"
         }
       ],
-      "stats": {
-        "performance": 80,
-        "security": 90,
-        "accessibility": 75
-      }
+      "stats": { "performance": 80, "security": 85, "accessibility": 90 }
     }`;
 
-    try {
-      // Using the most standard v1beta endpoint with a simplified payload to avoid "Unknown Field" errors
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
+    // We will try the stable v1 endpoint which works for most keys
+    const tryRequest = async (modelName) => {
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1/models/${modelName}:generateContent?key=${apiKey}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          contents: [{ 
-            parts: [{ text: promptText }] 
-          }]
+          contents: [{ parts: [{ text: promptText }] }]
         })
       });
+      return response;
+    };
+
+    try {
+      // Try primary stable model
+      let response = await tryRequest("gemini-1.5-flash");
+
+      // If primary fails with "not found", try the latest alias
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        if (errData.error?.message?.includes("not found")) {
+          response = await tryRequest("gemini-1.5-flash-latest");
+        }
+      }
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
@@ -147,14 +152,14 @@ const App = () => {
       const result = await response.json();
       const rawText = result.candidates?.[0]?.content?.parts?.[0]?.text;
       
-      if (!rawText) throw new Error("The AI didn't return a response. Check your API quota.");
+      if (!rawText) throw new Error("AI returned empty results. Please try again.");
       
       const cleanedData = cleanJsonResponse(rawText);
       const data = JSON.parse(cleanedData);
       setReport(data);
     } catch (err) {
       console.error("Analysis Error:", err);
-      setError(`Analysis Failed: ${err.message}`);
+      setError(`Critical Error: ${err.message}. Please ensure the Generative Language API is enabled for your key in Google AI Studio.`);
     } finally {
       setIsAnalyzing(false);
     }
@@ -166,14 +171,10 @@ const App = () => {
         <h2 className="text-3xl font-bold mb-8 flex items-center gap-3">
           <BookOpen className="text-indigo-600 w-8 h-8" /> Documentation
         </h2>
-        <div className="space-y-6 text-slate-600">
-          <h3 className="text-xl font-bold text-slate-800">How to use BugEye AI</h3>
-          <p>1. <strong>Sign In</strong>: Use your Google account to log in.</p>
-          <p>2. <strong>Enter URL</strong>: Paste the full link (e.g., https://google.com) into the search bar.</p>
-          <p>3. <strong>Analyze</strong>: Wait 5-10 seconds for the AI to audit the site structure.</p>
-          
-          <div className="bg-indigo-50 border-l-4 border-indigo-400 p-4 text-indigo-800 text-sm rounded-r-lg">
-            <strong>Note for Winnie:</strong> If you see a "Model not found" error, ensure you created your API key in the <a href="https://aistudio.google.com/" target="_blank" className="underline font-bold">Google AI Studio</a>.
+        <div className="space-y-6 text-slate-600 leading-relaxed">
+          <p>BugEye AI uses large language models to simulate a site audit. It evaluates structural patterns, UI responsiveness, and security headers based on publicly available data.</p>
+          <div className="bg-indigo-50 border-l-4 border-indigo-400 p-4 text-indigo-800 text-sm rounded-r-xl">
+            <strong>Pro Tip:</strong> Ensure your API key is created at <a href="https://aistudio.google.com/" target="_blank" className="font-bold underline">Google AI Studio</a>. Keys from the standard Google Cloud Console sometimes require additional billing setup.
           </div>
         </div>
         <button onClick={() => setView('home')} className="mt-8 bg-indigo-600 text-white px-8 py-3 rounded-2xl font-bold hover:bg-indigo-700 transition-all">
@@ -213,7 +214,7 @@ const App = () => {
               <h1 className="text-5xl font-black mb-4 tracking-tight leading-tight text-slate-900">
                 Find Website Bugs <span className="text-indigo-600">Instantly</span>
               </h1>
-              <p className="text-slate-500 text-lg max-w-lg mx-auto">Enter any website URL to generate a layman-friendly bug report in seconds.</p>
+              <p className="text-slate-500 text-lg max-w-lg mx-auto">Enter any website URL to generate an AI-powered bug report in seconds.</p>
             </div>
 
             <form onSubmit={(e) => { e.preventDefault(); if(url) analyzeWebsite(url); }} className="relative mb-8 group">
@@ -233,10 +234,10 @@ const App = () => {
 
             {error && (
               <div className="p-6 bg-rose-50 border border-rose-200 text-rose-700 rounded-3xl mb-8 flex items-start gap-4 animate-in fade-in slide-in-from-top-2">
-                <ShieldAlert className="w-6 h-6 shrink-0 mt-0.5" />
+                <ShieldAlert className="w-6 h-6 shrink-0 mt-0.5 text-rose-600" />
                 <div>
-                  <p className="font-bold mb-1 text-rose-800">Critical Error</p>
-                  <p className="text-sm leading-relaxed">{error}</p>
+                  <p className="font-bold mb-1">Configuration Required</p>
+                  <p className="text-sm leading-relaxed opacity-90">{error}</p>
                 </div>
               </div>
             )}
@@ -247,7 +248,7 @@ const App = () => {
                   <div className="w-16 h-16 border-4 border-indigo-100 border-t-indigo-600 rounded-full animate-spin mx-auto"></div>
                   <Bug className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-indigo-600 w-6 h-6" />
                 </div>
-                <h3 className="text-xl font-bold text-slate-800">AI is Auditing Site Architecture...</h3>
+                <h3 className="text-xl font-bold text-slate-800">AI is Auditing Architecture...</h3>
                 <p className="text-slate-400 mt-2 italic">Scanning UI components and security protocols</p>
               </div>
             )}
@@ -275,7 +276,7 @@ const App = () => {
                   
                   <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-10 pb-8 border-b border-slate-100 relative z-10">
                     <div>
-                      <h2 className="text-3xl font-black text-slate-900 tracking-tight">Overall Health Score</h2>
+                      <h2 className="text-3xl font-black text-slate-900 tracking-tight">Health Score</h2>
                       <p className="text-slate-500 mt-1">Simulated audit based on URL structure</p>
                     </div>
                     <div className="bg-indigo-600 px-8 py-5 rounded-3xl shadow-xl shadow-indigo-100">
@@ -326,12 +327,12 @@ const App = () => {
       </main>
 
       <footer className="py-12 border-t border-slate-200 mt-20 bg-white">
-        <div className="max-w-7xl mx-auto px-4 flex flex-col md:flex-row justify-between items-center gap-6 opacity-50 grayscale hover:grayscale-0 transition-all duration-500">
-          <div className="flex items-center gap-2">
+        <div className="max-w-7xl mx-auto px-4 text-center opacity-40 grayscale hover:grayscale-0 transition-all">
+          <div className="flex items-center justify-center gap-2 mb-2">
             <Bug className="w-5 h-5" />
-            <span className="font-bold">BugEye AI v1.0</span>
+            <span className="font-bold">BugEye AI v1.2</span>
           </div>
-          <p className="text-xs font-medium">Built with React, Firebase & Gemini Flash</p>
+          <p className="text-[10px] font-medium uppercase tracking-widest">Built with React & Gemini Stable API</p>
         </div>
       </footer>
     </div>
