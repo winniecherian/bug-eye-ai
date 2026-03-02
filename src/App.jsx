@@ -80,6 +80,7 @@ const App = () => {
   // Helper to clean AI response (removes markdown code blocks if present)
   const cleanJsonResponse = (text) => {
     if (!text) return "";
+    // Removes markdown backticks and the word "json" if the AI includes them
     return text.replace(/```json/g, '').replace(/```/g, '').trim();
   };
 
@@ -94,21 +95,30 @@ const App = () => {
     setReport(null);
 
     try {
-      // Switched to the V1 STABLE endpoint for maximum compatibility with all API keys
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
+      // Using v1beta with the standard gemini-1.5-flash model
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           contents: [
             { 
               role: "user",
-              parts: [{ text: `Analyze this website for bugs: ${targetUrl}` }] 
+              parts: [{ 
+                text: `You are a professional QA engineer. Analyze this website for bugs: ${targetUrl}. 
+                Return a valid JSON object ONLY. Do not include any text before or after the JSON.
+                
+                Schema: 
+                { 
+                  "siteScore": number (0-100), 
+                  "summary": "string (layman summary)", 
+                  "bugs": [{"id": number, "type": "UI/UX|Performance|Security", "title": "string", "description": "string", "severity": "High|Medium|Low", "fix": "string (code or config)"}], 
+                  "stats": {"performance": number, "security": number, "accessibility": number} 
+                }` 
+              }] 
             }
           ],
-          systemInstruction: { 
-            parts: [{ text: "You are a professional QA engineer. Return a valid JSON object ONLY. Schema: { \"siteScore\": number, \"summary\": \"string\", \"bugs\": [{\"id\": number, \"type\": \"string\", \"title\": \"string\", \"description\": \"string\", \"severity\": \"High|Medium|Low\", \"fix\": \"string\"}], \"stats\": {\"performance\": number, \"security\": number, \"accessibility\": number} }" }] 
-          },
           generationConfig: { 
+            // We set this to true to force a JSON-friendly format
             responseMimeType: "application/json"
           }
         })
@@ -116,7 +126,6 @@ const App = () => {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        // Improved error reporting for better debugging
         const msg = errorData.error?.message || `API Error: ${response.status}`;
         throw new Error(msg);
       }
@@ -146,7 +155,7 @@ const App = () => {
         <div className="space-y-6 text-slate-600">
           <p>BugEye AI simulates a technical audit by analyzing common architectural patterns and potential vulnerabilities based on standard web practices.</p>
           <div className="bg-amber-50 border-l-4 border-amber-400 p-4 text-amber-800 text-sm rounded-r-lg">
-            <strong>Troubleshooting Tip:</strong> If analysis fails, go to <a href="https://aistudio.google.com/" target="_blank" className="underline font-bold">Google AI Studio</a> and make sure your API key is active.
+            <strong>Troubleshooting Tip:</strong> If analysis fails repeatedly, ensure your API key has "Generative Language API" enabled in your Google Cloud Console.
           </div>
         </div>
         <button onClick={() => setView('home')} className="mt-8 bg-indigo-600 text-white px-8 py-3 rounded-2xl font-bold hover:bg-indigo-700 transition-all">
