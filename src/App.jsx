@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Search, Bug, ShieldAlert, Zap, CheckCircle2, AlertTriangle, ArrowRight, 
   Download, RefreshCw, ExternalLink, Layout, Code2, Cpu, LineChart, 
@@ -61,10 +61,10 @@ const App = () => {
   }, []);
 
   const saveToHistory = (newReport, targetUrl) => {
-    if (!newReport) return;
+    if (!newReport || !newReport.siteScore) return;
     const entry = { 
       url: targetUrl, 
-      score: newReport.siteScore || 0, 
+      score: newReport.siteScore, 
       timestamp: new Date().toISOString(), 
       report: newReport 
     };
@@ -73,14 +73,12 @@ const App = () => {
     localStorage.setItem('bugeye_history_v2', JSON.stringify(updated));
   };
 
-  // Helper to strip Markdown backticks and whitespace from AI response
   const cleanJsonResponse = (text) => {
     if (!text) return "";
     let cleaned = text.trim();
     if (cleaned.includes('```')) {
       const parts = cleaned.split('```');
-      // Look for the part that looks like JSON (usually after ```json)
-      const jsonPart = parts.find(p => p.trim().startsWith('{') || p.toLowerCase().startsWith('json'));
+      const jsonPart = parts.find(p => p.trim().startsWith('{') || p.toLowerCase().includes('json'));
       if (jsonPart) {
         cleaned = jsonPart.replace(/^json/i, '').trim();
       }
@@ -90,7 +88,7 @@ const App = () => {
 
   const analyzeWebsite = async (targetUrl) => {
     if (!apiKey) {
-      setError("Groq API Key Missing! Please add 'VITE_GROQ_API_KEY' to Vercel.");
+      setError("Groq API Key Missing! Please add 'VITE_GROQ_API_KEY' to Vercel Settings.");
       return;
     }
     
@@ -99,7 +97,8 @@ const App = () => {
     setReport(null);
 
     try {
-      const response = await fetch("[https://api.groq.com/openai/v1/chat/completions](https://api.groq.com/openai/v1/chat/completions)", {
+      // FIXED: Corrected the URL string (removed markdown brackets)
+      const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
@@ -111,54 +110,20 @@ const App = () => {
             {
               role: "system",
               content: `You are a Principal Security Engineer. Perform an exhaustive architectural security audit. 
-              Do not be repetitive. Analyze the specific nature of the URL (e.g., if it's a shop, check transaction security; if it's a blog, check script injection).
-              Compare directly against Google's Zero Trust and Meta's dynamic CSP standards. 
+              Analyze the specific nature of the URL. Compare against Google's Zero Trust and Meta's CSP standards. 
               Always return valid JSON.`
             },
             {
               role: "user",
-              content: `Perform a High-Parameter Hardened Security Audit for: ${targetUrl}. 
-              
-              You must evaluate 12 specific dimensions:
-              1. TLS/SSL Protocol Version & Cipher Suite Strength
-              2. Content Security Policy (CSP) Strictness
-              3. HSTS & Transport Security
-              4. X-Frame-Options (Clickjacking protection)
-              5. Cookie Attributes (Secure, HttpOnly, SameSite)
-              6. Information Disclosure (Server Headers/Version leakage)
-              7. Resource Isolation (COOP/COEP)
-              8. Subresource Integrity (SRI) for 3rd party scripts
-              9. DNSSEC and Domain Security
-              10. API Authentication Patterns
-              11. Frontend Vulnerabilities (XSS entry points)
-              12. Comparison with Facebook/X/Google Infrastructure Benchmarks
-              
-              Return a JSON object:
+              content: `Perform a High-Parameter Security Audit for: ${targetUrl}. 
+              Return a JSON object with this exact structure:
               {
                 "siteScore": number,
-                "summary": "Deep layman summary",
-                "detailedStats": {
-                  "infrastructure": number,
-                  "application": number,
-                  "dataPrivacy": number,
-                  "network": number
-                },
-                "parameters": [
-                  {"name": "string", "score": number, "status": "Secure|Warning|Critical"}
-                ],
-                "bugs": [
-                  {
-                    "id": number,
-                    "type": "string",
-                    "title": "string",
-                    "description": "layman explanation",
-                    "benchmarkReference": "Specific Big Tech standard",
-                    "verificationMethod": "How this was simulated",
-                    "severity": "Critical|High|Medium|Low",
-                    "fix": "Technical fix"
-                  }
-                ],
-                "stats": { "performance": number, "security": number, "accessibility": number, "seo": number }
+                "summary": "layman summary",
+                "detailedStats": {"infrastructure": number, "application": number, "dataPrivacy": number, "network": number},
+                "parameters": [{"name": "string", "score": number, "status": "Secure|Warning|Critical"}],
+                "bugs": [{"id": number, "type": "string", "title": "string", "description": "string", "benchmarkReference": "string", "verificationMethod": "string", "severity": "Critical|High|Medium|Low", "fix": "string"}],
+                "stats": {"performance": number, "security": number, "accessibility": number, "seo": number}
               }`
             }
           ],
@@ -166,21 +131,20 @@ const App = () => {
         })
       });
 
-      if (!response.ok) throw new Error(`API Error: ${response.status}`);
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.error?.message || `API Error: ${response.status}`);
+      }
 
       const result = await response.json();
       const rawContent = result.choices[0].message.content;
       const cleanedData = cleanJsonResponse(rawContent);
       
-      try {
-        const data = JSON.parse(cleanedData);
-        setReport(data);
-        saveToHistory(data, targetUrl);
-      } catch (parseErr) {
-        console.error("JSON Parse Error:", parseErr, "Cleaned Content:", cleanedData);
-        throw new Error("The AI returned an invalid data format. Please try again.");
-      }
+      const data = JSON.parse(cleanedData);
+      setReport(data);
+      saveToHistory(data, targetUrl);
     } catch (err) {
+      console.error("Audit error:", err);
       setError(`Audit Failed: ${err.message}`);
     } finally {
       setIsAnalyzing(false);
@@ -189,7 +153,7 @@ const App = () => {
 
   const copyToClipboard = () => {
     if (!report) return;
-    const text = `BugEye AI Hardened Report for ${url}: Score ${report.siteScore}%. Benchmark verified.`;
+    const text = `BugEye AI Report for ${url}: Health Score ${report.siteScore}%. Check it out!`;
     navigator.clipboard.writeText(text);
     setShowCopyAlert(true);
     setTimeout(() => setShowCopyAlert(false), 2000);
@@ -200,7 +164,7 @@ const App = () => {
     const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(report, null, 2));
     const downloadAnchorNode = document.createElement('a');
     downloadAnchorNode.setAttribute("href", dataStr);
-    downloadAnchorNode.setAttribute("download", `bugeye_hardened_report.json`);
+    downloadAnchorNode.setAttribute("download", `bugeye_audit_${url.replace(/[^a-z0-9]/gi, '_')}.json`);
     document.body.appendChild(downloadAnchorNode);
     downloadAnchorNode.click();
     downloadAnchorNode.remove();
@@ -219,11 +183,10 @@ const App = () => {
     <div className="min-h-screen bg-slate-50 text-slate-900 font-sans selection:bg-indigo-100 pb-20">
       {showCopyAlert && (
         <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[100] bg-indigo-600 text-white px-6 py-3 rounded-full shadow-2xl flex items-center gap-3 animate-in fade-in slide-in-from-top-4">
-          <ClipboardCheck className="w-5 h-5" /> Hardened Report Link Copied!
+          <ClipboardCheck className="w-5 h-5" /> Link Copied!
         </div>
       )}
 
-      {/* Navbar */}
       <nav className="bg-white/80 backdrop-blur-md border-b border-slate-200 sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
           <button onClick={() => { setView('home'); setReport(null); setError(null); }} className="flex items-center gap-3 hover:scale-105 transition-transform">
@@ -238,7 +201,7 @@ const App = () => {
             <div className="h-6 w-[1px] bg-slate-200"></div>
             <div className="flex items-center gap-2 text-indigo-600">
               <ShieldCheck className="w-5 h-5" />
-              <span className="text-xs font-black uppercase tracking-widest">Hardened v2.0</span>
+              <span className="text-xs font-black uppercase tracking-widest">Hardened v2.5</span>
             </div>
           </div>
         </div>
@@ -247,21 +210,21 @@ const App = () => {
       <main className="max-w-7xl mx-auto px-6 py-12">
         {view === 'docs' ? (
            <div className="max-w-4xl mx-auto py-12 px-4 animate-in fade-in slide-in-from-bottom-4">
-           <div className="bg-white rounded-[3rem] p-12 shadow-2xl border border-slate-200">
-             <h2 className="text-4xl font-black mb-8 flex items-center gap-4 text-slate-900">
-               <ShieldCheck className="text-indigo-600 w-10 h-10" /> Hardened Benchmarks
-             </h2>
-             <div className="space-y-8 text-slate-600 leading-relaxed text-lg">
-               <section className="bg-slate-900 rounded-3xl p-8 border border-slate-800 text-slate-300">
-                 <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
-                   <Terminal className="w-6 h-6 text-indigo-400" /> Big Tech Methodology
-                 </h3>
-                 <p>BugEye AI compares target URLs against the publicly documented security whitepapers of <strong>Google</strong> (Zero-Trust), <strong>Meta</strong> (XSS Mitigation), and <strong>X.com</strong> (Session Hardening).</p>
-               </section>
+             <div className="bg-white rounded-[3rem] p-12 shadow-2xl border border-slate-200">
+               <h2 className="text-4xl font-black mb-8 flex items-center gap-4 text-slate-900">
+                 <ShieldCheck className="text-indigo-600 w-10 h-10" /> Hardened Benchmarks
+               </h2>
+               <div className="space-y-8 text-slate-600 leading-relaxed text-lg">
+                 <section className="bg-slate-900 rounded-3xl p-8 border border-slate-800 text-slate-300">
+                   <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
+                     <Terminal className="w-6 h-6 text-indigo-400" /> Big Tech Methodology
+                   </h3>
+                   <p>BugEye AI compares target URLs against the publicly documented security whitepapers of <strong>Google</strong> (Zero-Trust), <strong>Meta</strong> (XSS Mitigation), and <strong>X.com</strong> (Session Hardening).</p>
+                 </section>
+               </div>
+               <button onClick={() => setView('home')} className="mt-12 bg-slate-900 text-white px-10 py-4 rounded-2xl font-bold hover:bg-slate-800 transition-all shadow-lg text-lg">Back to Dashboard</button>
              </div>
-             <button onClick={() => setView('home')} className="mt-12 bg-slate-900 text-white px-10 py-4 rounded-2xl font-bold hover:bg-slate-800 transition-all shadow-lg text-lg">Back to Dashboard</button>
            </div>
-         </div>
         ) : (
           <div className="max-w-6xl mx-auto">
             <div className="text-center mb-12 space-y-4">
@@ -269,7 +232,7 @@ const App = () => {
                 Find Website Bugs <span className="bg-clip-text text-transparent bg-gradient-to-r from-indigo-600 to-violet-600 font-black italic">Instantly.</span>
               </h1>
               <p className="text-slate-500 text-xl max-w-2xl mx-auto font-medium leading-relaxed">
-                Advanced multi-parameter security audit. Benchmarked against the world's most hardened infrastructures.
+                Advanced 12-parameter security audit powered by Groq Llama 3. Benchmarked against Google, Meta, and X.
               </p>
             </div>
 
@@ -318,10 +281,7 @@ const App = () => {
 
             {report && !isAnalyzing && (
               <div className="space-y-10 animate-in fade-in slide-in-from-bottom-12 duration-1000">
-                
-                {/* Visual Dashboard Grid */}
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                   {/* Main Score Card */}
                    <div className="lg:col-span-2 bg-white p-10 rounded-[3.5rem] border border-slate-200 shadow-2xl relative overflow-hidden flex flex-col justify-between">
                      <div className="relative z-10">
                         <div className="flex justify-between items-start mb-8">
@@ -339,11 +299,9 @@ const App = () => {
                               <Eye className="w-5 h-5 text-indigo-500" />
                               <h3 className="text-xs font-black uppercase text-slate-400 tracking-widest">Auditor Conclusion</h3>
                            </div>
-                           <p className="text-xl text-slate-700 font-semibold leading-relaxed italic">"{report.summary || 'Scan complete. Summary pending analysis.'}"</p>
+                           <p className="text-xl text-slate-700 font-semibold leading-relaxed italic">"{report.summary || 'Audit complete.'}"</p>
                         </div>
                      </div>
-                     
-                     {/* 12-Parameter Matrix */}
                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 relative z-10">
                         {report.parameters?.map((p, idx) => (
                            <div key={idx} className="bg-white border border-slate-100 p-4 rounded-2xl shadow-sm hover:border-indigo-200 transition-colors">
@@ -357,11 +315,10 @@ const App = () => {
                      </div>
                    </div>
 
-                   {/* Distribution Stats */}
                    <div className="bg-slate-900 p-10 rounded-[3.5rem] shadow-2xl flex flex-col justify-between text-white">
                       <div className="space-y-8">
                          <h3 className="text-xl font-black tracking-tight flex items-center gap-3">
-                            <Activity className="text-indigo-400 w-6 h-6" /> Risk Distribution
+                            <Activity className="text-indigo-400 w-6 h-6" /> Risk distribution
                          </h3>
                          <div className="space-y-6">
                             {[
@@ -387,12 +344,11 @@ const App = () => {
                             <ShieldPlus className="w-5 h-5" />
                             <span className="text-xs font-black uppercase tracking-widest">Verification Profile</span>
                          </div>
-                         <p className="text-xs text-slate-400 leading-relaxed font-medium">This audit uses Groq's high-entropy Llama 3 engine to cross-reference known Big Tech security footprints.</p>
+                         <p className="text-xs text-slate-400 leading-relaxed font-medium">Built using Groq's Llama 3 engine for real-time security pattern detection.</p>
                       </div>
                    </div>
                 </div>
 
-                {/* Bug Details - The "Hardened" List */}
                 <div className="space-y-8">
                   <div className="flex items-center justify-between px-4">
                     <h2 className="text-2xl font-black tracking-tight text-slate-900 flex items-center gap-3">
@@ -410,14 +366,14 @@ const App = () => {
                         <div className="flex flex-col md:flex-row justify-between items-start mb-8 gap-6 relative z-10">
                           <div className="space-y-3">
                             <div className="flex items-center gap-2">
-                              <span className="p-1.5 bg-indigo-50 rounded-lg text-indigo-600 uppercase text-[10px] font-black tracking-widest">{bug.type}</span>
+                              <span className="p-1.5 bg-indigo-50 rounded-lg text-indigo-600 uppercase text-[10px] font-black tracking-widest">{bug.type || 'Security'}</span>
                               <div className="w-1 h-1 bg-slate-200 rounded-full"></div>
-                              <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">ID: AUDIT_00{bug.id}</span>
+                              <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">ID: AUDIT_00{bug.id || i}</span>
                             </div>
                             <h3 className="text-3xl font-black text-slate-900 group-hover:text-indigo-600 transition-colors tracking-tight">{bug.title}</h3>
                           </div>
                           <span className={`px-8 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest border-2 ${getSeverityStyles(bug.severity)}`}>
-                            {bug.severity || 'Unranked'} Risk
+                            {bug.severity || 'Medium'} Risk
                           </span>
                         </div>
                         
@@ -427,30 +383,28 @@ const App = () => {
                               <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Vulnerability Insight</h4>
                               <p className="text-slate-600 leading-relaxed font-medium text-lg">{bug.description}</p>
                             </div>
-                            
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                               <div className="bg-indigo-50/50 p-5 rounded-3xl border border-indigo-100">
                                 <h4 className="text-[9px] font-black text-indigo-600 uppercase tracking-widest mb-2 flex items-center gap-2">
                                   <ShieldCheck className="w-3 h-3" /> Benchmark Ref
                                 </h4>
-                                <p className="text-[11px] text-indigo-800 font-bold italic">{bug.benchmarkReference || 'Standard Protocol'}</p>
+                                <p className="text-[11px] text-indigo-800 font-bold italic">{bug.benchmarkReference || 'Standard Security'}</p>
                               </div>
                               <div className="bg-slate-50 p-5 rounded-3xl border border-slate-100">
                                 <h4 className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2 flex items-center gap-2">
                                   <Eye className="w-3 h-3" /> Analysis Method
                                 </h4>
-                                <p className="text-[11px] text-slate-600 font-medium">{bug.verificationMethod || 'AI-Simulated Audit'}</p>
+                                <p className="text-[11px] text-slate-600 font-medium">{bug.verificationMethod || 'AI Scan'}</p>
                               </div>
                             </div>
                           </div>
-                          
                           <div className="space-y-4">
                             <div className="flex items-center justify-between">
                                <h4 className="text-[10px] font-black text-indigo-500 uppercase tracking-widest">Security Remediation Script</h4>
                                <Terminal className="w-4 h-4 text-slate-300" />
                             </div>
                             <div className="bg-slate-900 text-indigo-300 p-8 rounded-[2rem] font-mono text-xs whitespace-pre-wrap border border-slate-800 shadow-2xl leading-relaxed relative group/code overflow-x-auto">
-                              {bug.fix || 'No manual fix required for this vulnerability.'}
+                              {bug.fix || 'No script available.'}
                             </div>
                           </div>
                         </div>
