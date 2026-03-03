@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Search, Bug, ShieldAlert, Zap, CheckCircle2, AlertTriangle, ArrowRight, 
   Download, RefreshCw, ExternalLink, Layout, Code2, Cpu, LineChart, 
   BookOpen, Globe, Lock, Eye, ShieldX, History, Share2, ClipboardCheck, Info,
-  ShieldCheck, Shield, Terminal, Fingerprint
+  ShieldCheck, Shield, Terminal, Fingerprint, Activity, Server, ShieldPlus,
+  Network, Key, FileWarning, Gauge
 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { getFirestore } from 'firebase/firestore';
@@ -49,7 +50,7 @@ const App = () => {
   const [showCopyAlert, setShowCopyAlert] = useState(false);
 
   useEffect(() => {
-    const saved = localStorage.getItem('bugeye_history');
+    const saved = localStorage.getItem('bugeye_history_v2');
     if (saved) setHistory(JSON.parse(saved));
   }, []);
 
@@ -57,7 +58,7 @@ const App = () => {
     const entry = { url: targetUrl, score: newReport.siteScore, timestamp: new Date().toISOString(), report: newReport };
     const updated = [entry, ...history.filter(h => h.url !== targetUrl)].slice(0, 5);
     setHistory(updated);
-    localStorage.setItem('bugeye_history', JSON.stringify(updated));
+    localStorage.setItem('bugeye_history_v2', JSON.stringify(updated));
   };
 
   const analyzeWebsite = async (targetUrl) => {
@@ -82,28 +83,49 @@ const App = () => {
           messages: [
             {
               role: "system",
-              content: `You are a Global Cybersecurity Lead specialized in Big Tech Infrastructure. 
-              Your task is to audit websites specifically against the high-security benchmarks of Google, Meta (Facebook), and X.com. 
-              Focus on: Hardened Headers (CSP, HSTS, XFO), Data Isolation, Information Disclosure prevention, and OAuth security patterns.
-              You MUST provide a 'benchmarkReference' for every bug explaining which tech giant's security standard is being missed.`
+              content: `You are a Principal Security Engineer. Perform an exhaustive architectural security audit. 
+              Do not be repetitive. Analyze the specific nature of the URL (e.g., if it's a shop, check transaction security; if it's a blog, check script injection).
+              Compare directly against Google's Zero Trust and Meta's dynamic CSP standards.`
             },
             {
               role: "user",
-              content: `Perform a Hardened Security Audit for: ${targetUrl}. 
-              Compare its architecture against Google's Zero-Trust, Meta's CSP strictness, and X.com's session management standards.
+              content: `Perform a High-Parameter Hardened Security Audit for: ${targetUrl}. 
+              
+              You must evaluate 12 specific dimensions:
+              1. TLS/SSL Protocol Version & Cipher Suite Strength
+              2. Content Security Policy (CSP) Strictness
+              3. HSTS & Transport Security
+              4. X-Frame-Options (Clickjacking protection)
+              5. Cookie Attributes (Secure, HttpOnly, SameSite)
+              6. Information Disclosure (Server Headers/Version leakage)
+              7. Resource Isolation (COOP/COEP)
+              8. Subresource Integrity (SRI) for 3rd party scripts
+              9. DNSSEC and Domain Security
+              10. API Authentication Patterns
+              11. Frontend Vulnerabilities (XSS entry points)
+              12. Comparison with Facebook/X/Google Infrastructure Benchmarks
               
               Return a JSON object:
               {
                 "siteScore": number,
-                "summary": "layman summary",
+                "summary": "Deep layman summary",
+                "detailedStats": {
+                  "infrastructure": number,
+                  "application": number,
+                  "dataPrivacy": number,
+                  "network": number
+                },
+                "parameters": [
+                  {"name": "string", "score": number, "status": "Secure|Warning|Critical"}
+                ],
                 "bugs": [
                   {
                     "id": number,
-                    "type": "Security|Performance|UI/UX",
+                    "type": "string",
                     "title": "string",
                     "description": "layman explanation",
-                    "benchmarkReference": "Which specific Big Tech security standard (Google/Facebook/X) this is measured against",
-                    "verificationMethod": "Explain how the AI simulated this check",
+                    "benchmarkReference": "Specific Big Tech standard",
+                    "verificationMethod": "How this was simulated",
                     "severity": "Critical|High|Medium|Low",
                     "fix": "Technical fix"
                   }
@@ -129,23 +151,6 @@ const App = () => {
     }
   };
 
-  const copyToClipboard = () => {
-    const text = `BugEye AI Hardened Report for ${url}: Score ${report.siteScore}%. Benchmark verified.`;
-    navigator.clipboard.writeText(text);
-    setShowCopyAlert(true);
-    setTimeout(() => setShowCopyAlert(false), 2000);
-  };
-
-  const downloadReport = () => {
-    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(report, null, 2));
-    const downloadAnchorNode = document.createElement('a');
-    downloadAnchorNode.setAttribute("href", dataStr);
-    downloadAnchorNode.setAttribute("download", `bugeye_hardened_report.json`);
-    document.body.appendChild(downloadAnchorNode);
-    downloadAnchorNode.click();
-    downloadAnchorNode.remove();
-  };
-
   const getSeverityStyles = (severity) => {
     switch (severity?.toLowerCase()) {
       case 'critical': return 'bg-red-600 text-white border-red-700';
@@ -155,53 +160,9 @@ const App = () => {
     }
   };
 
-  const Documentation = () => (
-    <div className="max-w-4xl mx-auto py-12 px-4 animate-in fade-in slide-in-from-bottom-4">
-      <div className="bg-white rounded-[3rem] p-12 shadow-2xl border border-slate-200">
-        <h2 className="text-4xl font-black mb-8 flex items-center gap-4 text-slate-900">
-          <ShieldCheck className="text-indigo-600 w-10 h-10" /> Hardened Benchmarks
-        </h2>
-        <div className="space-y-8 text-slate-600 leading-relaxed text-lg">
-          <section className="bg-slate-900 rounded-3xl p-8 border border-slate-800 text-slate-300">
-            <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
-              <Terminal className="w-6 h-6 text-indigo-400" /> Big Tech Methodology
-            </h3>
-            <p>BugEye AI simulates audits by comparing target URLs against the publicly documented security whitepapers of <strong>Google</strong> (Zero-Trust), <strong>Meta</strong> (XSS Mitigation), and <strong>X.com</strong> (Session Hardening). This ensures your site is measured against the best in the world.</p>
-          </section>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="p-6 border border-slate-100 rounded-2xl bg-slate-50 text-center">
-              <div className="bg-white w-10 h-10 rounded-full flex items-center justify-center mx-auto mb-3 shadow-sm font-black text-indigo-600">G</div>
-              <h4 className="font-bold text-slate-900 mb-1 text-sm">Google Standard</h4>
-              <p className="text-[10px] uppercase tracking-tighter">Identity & TLS</p>
-            </div>
-            <div className="p-6 border border-slate-100 rounded-2xl bg-slate-50 text-center">
-              <div className="bg-white w-10 h-10 rounded-full flex items-center justify-center mx-auto mb-3 shadow-sm font-black text-blue-600">f</div>
-              <h4 className="font-bold text-slate-900 mb-1 text-sm">Meta Standard</h4>
-              <p className="text-[10px] uppercase tracking-tighter">CSP & Protection</p>
-            </div>
-            <div className="p-6 border border-slate-100 rounded-2xl bg-slate-50 text-center">
-              <div className="bg-white w-10 h-10 rounded-full flex items-center justify-center mx-auto mb-3 shadow-sm font-black text-slate-900">𝕏</div>
-              <h4 className="font-bold text-slate-900 mb-1 text-sm">X Standard</h4>
-              <p className="text-[10px] uppercase tracking-tighter">Auth & Integrity</p>
-            </div>
-          </div>
-        </div>
-        <button onClick={() => setView('home')} className="mt-12 bg-slate-900 text-white px-10 py-4 rounded-2xl font-bold hover:bg-slate-800 transition-all shadow-lg">
-          Back to Dashboard
-        </button>
-      </div>
-    </div>
-  );
-
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 font-sans selection:bg-indigo-100">
-      {showCopyAlert && (
-        <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[100] bg-indigo-600 text-white px-6 py-3 rounded-full shadow-2xl flex items-center gap-3 animate-in fade-in slide-in-from-top-4">
-          <ClipboardCheck className="w-5 h-5" /> Hardened Report Link Copied!
-        </div>
-      )}
-
+    <div className="min-h-screen bg-slate-50 text-slate-900 font-sans selection:bg-indigo-100 pb-20">
+      {/* Navbar */}
       <nav className="bg-white/80 backdrop-blur-md border-b border-slate-200 sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
           <button onClick={() => { setView('home'); setReport(null); }} className="flex items-center gap-3 hover:scale-105 transition-transform">
@@ -212,29 +173,46 @@ const App = () => {
           </button>
           
           <div className="flex items-center gap-8">
-            <button onClick={() => setView('docs')} className="text-sm font-bold text-slate-500 hover:text-indigo-600 transition-colors">Hardened Benchmarks</button>
+            <button onClick={() => setView('docs')} className="text-sm font-bold text-slate-500 hover:text-indigo-600 transition-colors">Methodology</button>
             <div className="h-6 w-[1px] bg-slate-200"></div>
             <div className="flex items-center gap-2 text-indigo-600">
-              <Fingerprint className="w-5 h-5" />
-              <span className="text-xs font-black uppercase tracking-widest">Public Engine 2.0</span>
+              <ShieldCheck className="w-5 h-5" />
+              <span className="text-xs font-black uppercase tracking-widest">Hardened v2.0</span>
             </div>
           </div>
         </div>
       </nav>
 
-      <main className="max-w-7xl mx-auto px-6 py-16">
-        {view === 'docs' ? <Documentation /> : (
-          <div className="max-w-5xl mx-auto">
-            <div className="text-center mb-16 space-y-4">
+      <main className="max-w-7xl mx-auto px-6 py-12">
+        {view === 'docs' ? (
+           <div className="max-w-4xl mx-auto py-12 px-4 animate-in fade-in slide-in-from-bottom-4">
+           <div className="bg-white rounded-[3rem] p-12 shadow-2xl border border-slate-200">
+             <h2 className="text-4xl font-black mb-8 flex items-center gap-4 text-slate-900">
+               <ShieldCheck className="text-indigo-600 w-10 h-10" /> Hardened Benchmarks
+             </h2>
+             <div className="space-y-8 text-slate-600 leading-relaxed text-lg">
+               <section className="bg-slate-900 rounded-3xl p-8 border border-slate-800 text-slate-300">
+                 <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
+                   <Terminal className="w-6 h-6 text-indigo-400" /> Big Tech Methodology
+                 </h3>
+                 <p>BugEye AI compares target URLs against the publicly documented security whitepapers of <strong>Google</strong> (Zero-Trust), <strong>Meta</strong> (XSS Mitigation), and <strong>X.com</strong> (Session Hardening).</p>
+               </section>
+             </div>
+             <button onClick={() => setView('home')} className="mt-12 bg-slate-900 text-white px-10 py-4 rounded-2xl font-bold hover:bg-slate-800 transition-all shadow-lg">Back to Dashboard</button>
+           </div>
+         </div>
+        ) : (
+          <div className="max-w-6xl mx-auto">
+            <div className="text-center mb-12 space-y-4">
               <h1 className="text-6xl font-black tracking-tighter text-slate-900 leading-tight">
-                Find Website Bugs <span className="bg-clip-text text-transparent bg-gradient-to-r from-indigo-600 to-violet-600 font-black">Instantly.</span>
+                Find Website Bugs <span className="bg-clip-text text-transparent bg-gradient-to-r from-indigo-600 to-violet-600 font-black italic">Instantly.</span>
               </h1>
               <p className="text-slate-500 text-xl max-w-2xl mx-auto font-medium leading-relaxed">
-                Audited against the security protocols of Google, Meta, and X.com. Professional-grade penetration simulation without the sign-in.
+                Advanced multi-parameter security audit. Benchmarked against the world's most hardened infrastructures.
               </p>
             </div>
 
-            <form onSubmit={(e) => { e.preventDefault(); if(url) analyzeWebsite(url); }} className="relative mb-12 group">
+            <form onSubmit={(e) => { e.preventDefault(); if(url) analyzeWebsite(url); }} className="relative mb-12 group max-w-4xl mx-auto">
               <div className="absolute -inset-1 bg-gradient-to-r from-indigo-500 to-purple-500 rounded-[2.5rem] blur opacity-25 group-focus-within:opacity-50 transition duration-1000"></div>
               <div className="relative">
                 <input 
@@ -252,29 +230,23 @@ const App = () => {
               </div>
             </form>
 
-            {!isAnalyzing && !report && history.length > 0 && (
-              <div className="mb-12 animate-in fade-in duration-700">
-                <h3 className="text-xs font-black text-slate-400 uppercase tracking-[0.2em] mb-4 flex items-center gap-2">
-                  <History className="w-4 h-4" /> Hardened Session History
-                </h3>
-                <div className="flex flex-wrap gap-3">
-                  {history.map((h, i) => (
-                    <button 
-                      key={i} 
-                      onClick={() => { setUrl(h.url); setReport(h.report); }}
-                      className="bg-white border border-slate-200 px-5 py-3 rounded-2xl text-sm font-bold flex items-center gap-3 hover:border-indigo-500 hover:shadow-lg transition-all"
-                    >
-                      <Globe className="w-4 h-4 text-slate-400" />
-                      {h.url}
-                      <span className="bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded-lg text-[10px] font-black">{h.score}%</span>
-                    </button>
-                  ))}
+            {isAnalyzing && (
+              <div className="text-center py-24 space-y-10 animate-pulse max-w-4xl mx-auto">
+                <div className="relative inline-block">
+                  <div className="w-32 h-32 border-[12px] border-indigo-100 border-t-indigo-600 rounded-full animate-spin mx-auto"></div>
+                  <Lock className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-indigo-600 w-10 h-10" />
+                </div>
+                <div className="space-y-4">
+                  <h3 className="text-3xl font-black text-slate-800 tracking-tight">Syncing 12 Security Parameters...</h3>
+                  <div className="flex justify-center gap-2">
+                    {[1,2,3,4,5].map(i => <div key={i} className="w-3 h-3 bg-indigo-200 rounded-full animate-bounce" style={{animationDelay: `${i*0.2}s`}}></div>)}
+                  </div>
                 </div>
               </div>
             )}
 
             {error && (
-              <div className="p-8 bg-rose-50 border-2 border-rose-100 text-rose-700 rounded-[2rem] mb-12 flex items-start gap-5 animate-in slide-in-from-top-4">
+              <div className="p-8 bg-rose-50 border-2 border-rose-100 text-rose-700 rounded-[2rem] mb-12 flex items-start gap-5 animate-in slide-in-from-top-4 max-w-4xl mx-auto">
                 <ShieldX className="w-8 h-8 shrink-0 mt-1" />
                 <div>
                   <p className="font-black text-lg mb-1 tracking-tight">Audit Interrupted</p>
@@ -283,122 +255,140 @@ const App = () => {
               </div>
             )}
 
-            {isAnalyzing && (
-              <div className="text-center py-24 space-y-8 animate-pulse">
-                <div className="relative inline-block">
-                  <div className="w-24 h-24 border-8 border-indigo-100 border-t-indigo-600 rounded-full animate-spin mx-auto"></div>
-                  <Lock className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-indigo-600 w-8 h-8" />
-                </div>
-                <div className="space-y-2">
-                  <h3 className="text-2xl font-black text-slate-800 tracking-tight">Applying Big Tech Benchmarks...</h3>
-                  <p className="text-slate-400 font-bold uppercase tracking-widest text-[10px]">Comparing architecture against Google, Meta & X</p>
-                </div>
-              </div>
-            )}
-
             {report && !isAnalyzing && (
               <div className="space-y-10 animate-in fade-in slide-in-from-bottom-12 duration-1000">
-                <div className="flex justify-between items-center mb-6">
-                  <div className="flex gap-4">
-                    <button onClick={downloadReport} className="flex items-center gap-2 text-sm font-black text-slate-600 bg-white border border-slate-200 px-6 py-3 rounded-xl hover:bg-slate-50 transition-colors">
-                      <Download className="w-4 h-4" /> Export Hardened Audit
-                    </button>
-                    <button onClick={copyToClipboard} className="flex items-center gap-2 text-sm font-black text-slate-600 bg-white border border-slate-200 px-6 py-3 rounded-xl hover:bg-slate-50 transition-colors">
-                      <Share2 className="w-4 h-4" /> Share Results
-                    </button>
-                  </div>
-                  <button onClick={() => { setReport(null); setUrl(''); }} className="text-sm font-black text-indigo-600 hover:underline">Clear Audit</button>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                  {[
-                    { label: 'Security', val: report.stats?.security || 0, color: 'text-rose-600', icon: Lock },
-                    { label: 'Performance', val: report.stats?.performance || 0, color: 'text-blue-600', icon: Zap },
-                    { label: 'Access', val: report.stats?.accessibility || 0, color: 'text-purple-600', icon: CheckCircle2 },
-                    { label: 'SEO Rank', val: report.stats?.seo || 0, color: 'text-emerald-600', icon: LineChart }
-                  ].map((stat, idx) => (
-                    <div key={idx} className="bg-white p-8 rounded-[2rem] border border-slate-200 shadow-xl group hover:border-indigo-500 transition-colors">
-                      <div className="flex items-center justify-between mb-4">
-                        <div className={`p-3 rounded-xl bg-slate-50 group-hover:bg-indigo-50 transition-colors`}>
-                          <stat.icon className={`w-6 h-6 ${stat.color}`} />
+                
+                {/* Visual Dashboard Grid */}
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                   {/* Main Score Card */}
+                   <div className="lg:col-span-2 bg-white p-10 rounded-[3.5rem] border border-slate-200 shadow-2xl relative overflow-hidden flex flex-col justify-between">
+                     <div className="relative z-10">
+                        <div className="flex justify-between items-start mb-8">
+                           <div>
+                              <h2 className="text-4xl font-black text-slate-900 tracking-tighter">Security Posture</h2>
+                              <p className="text-slate-400 font-bold uppercase tracking-widest text-[10px] mt-1">Global Infrastructure Audit</p>
+                           </div>
+                           <div className="bg-indigo-600 text-white p-6 rounded-3xl shadow-xl shadow-indigo-200 text-center">
+                              <span className="text-5xl font-black block leading-none">{report.siteScore}%</span>
+                              <span className="text-[10px] font-black uppercase tracking-widest mt-2 block opacity-80">Health</span>
+                           </div>
                         </div>
-                        <span className="text-3xl font-black text-slate-900">{stat.val}%</span>
+                        <div className="bg-slate-50 p-6 rounded-3xl border border-slate-100 mb-8">
+                           <div className="flex items-center gap-3 mb-3">
+                              <Eye className="w-5 h-5 text-indigo-500" />
+                              <h3 className="text-xs font-black uppercase text-slate-400 tracking-widest">Auditor Conclusion</h3>
+                           </div>
+                           <p className="text-xl text-slate-700 font-semibold leading-relaxed italic">"{report.summary}"</p>
+                        </div>
+                     </div>
+                     
+                     {/* 12-Parameter Matrix */}
+                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 relative z-10">
+                        {report.parameters?.map((p, idx) => (
+                           <div key={idx} className="bg-white border border-slate-100 p-4 rounded-2xl shadow-sm hover:border-indigo-200 transition-colors">
+                              <p className="text-[9px] font-black text-slate-400 uppercase truncate mb-1">{p.name}</p>
+                              <div className="flex items-center justify-between">
+                                 <span className="text-lg font-black">{p.score}%</span>
+                                 <div className={`w-2 h-2 rounded-full ${p.status === 'Secure' ? 'bg-emerald-500' : p.status === 'Warning' ? 'bg-amber-500' : 'bg-rose-500'}`}></div>
+                              </div>
+                           </div>
+                        ))}
+                     </div>
+                   </div>
+
+                   {/* Distribution Stats */}
+                   <div className="bg-slate-900 p-10 rounded-[3.5rem] shadow-2xl flex flex-col justify-between text-white">
+                      <div className="space-y-8">
+                         <h3 className="text-xl font-black tracking-tight flex items-center gap-3">
+                            <Activity className="text-indigo-400 w-6 h-6" /> Risk Distribution
+                         </h3>
+                         <div className="space-y-6">
+                            {[
+                              { label: 'Infrastructure', val: report.detailedStats?.infrastructure, color: 'bg-blue-500' },
+                              { label: 'Application', val: report.detailedStats?.application, color: 'bg-rose-500' },
+                              { label: 'Data Privacy', val: report.detailedStats?.dataPrivacy, color: 'text-purple-500' },
+                              { label: 'Network', val: report.detailedStats?.network, color: 'bg-emerald-500' }
+                            ].map((s, idx) => (
+                               <div key={idx} className="space-y-2">
+                                  <div className="flex justify-between text-[10px] font-black uppercase tracking-widest text-slate-400">
+                                     <span>{s.label}</span>
+                                     <span className="text-white">{s.val}%</span>
+                                  </div>
+                                  <div className="h-2 bg-slate-800 rounded-full overflow-hidden">
+                                     <div className={`h-full ${s.color} rounded-full transition-all duration-1000`} style={{width: `${s.val}%`}}></div>
+                                  </div>
+                               </div>
+                            ))}
+                         </div>
                       </div>
-                      <p className="text-slate-400 text-xs font-black uppercase tracking-widest">{stat.label}</p>
-                    </div>
-                  ))}
+                      <div className="mt-8 pt-8 border-t border-slate-800">
+                         <div className="flex items-center gap-3 text-indigo-400 mb-2">
+                            <ShieldPlus className="w-5 h-5" />
+                            <span className="text-xs font-black uppercase tracking-widest">Verification Profile</span>
+                         </div>
+                         <p className="text-xs text-slate-400 leading-relaxed font-medium">This audit uses Groq's high-entropy Llama 3 engine to cross-reference known Big Tech security footprints.</p>
+                      </div>
+                   </div>
                 </div>
 
-                <div className="bg-white p-12 rounded-[3.5rem] border border-slate-200 shadow-2xl relative overflow-hidden">
-                  <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-50 rounded-bl-full -z-0 opacity-40"></div>
-                  
-                  <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-12 pb-10 border-b border-slate-100 relative z-10">
-                    <div className="space-y-2">
-                      <h2 className="text-4xl font-black text-slate-900 tracking-tighter">Security Profile Analysis</h2>
-                      <div className="flex items-center gap-2">
-                        <span className="text-slate-400 font-bold text-lg uppercase tracking-widest text-[10px]">Llama-3.3 Hardened Engine</span>
-                        <div className="w-1 h-1 bg-slate-300 rounded-full"></div>
-                        <span className="text-indigo-600 font-black uppercase tracking-widest text-[10px]">Google/Meta/X Benchmarks Applied</span>
-                      </div>
-                    </div>
-                    <div className="bg-indigo-600 px-10 py-6 rounded-[2rem] shadow-2xl shadow-indigo-200">
-                      <div className="text-5xl font-black text-white">{report.siteScore || 0}%</div>
+                {/* Bug Details - The "Hardened" List */}
+                <div className="space-y-8">
+                  <div className="flex items-center justify-between px-4">
+                    <h2 className="text-2xl font-black tracking-tight text-slate-900 flex items-center gap-3">
+                       <FileWarning className="text-rose-600" /> Vulnerability Remediation
+                    </h2>
+                    <div className="flex gap-2">
+                      <button onClick={downloadReport} className="p-2 hover:bg-white rounded-lg transition-colors"><Download className="w-5 h-5 text-slate-400" /></button>
+                      <button onClick={copyToClipboard} className="p-2 hover:bg-white rounded-lg transition-colors"><Share2 className="w-5 h-5 text-slate-400" /></button>
                     </div>
                   </div>
-
-                  <div className="mb-14 relative z-10">
-                    <div className="flex items-center gap-3 mb-4">
-                      <Eye className="w-5 h-5 text-indigo-500" />
-                      <h3 className="text-xs font-black uppercase text-slate-400 tracking-widest">Synthetic Crawl Conclusion</h3>
-                    </div>
-                    <p className="text-2xl text-slate-700 font-semibold leading-relaxed font-serif italic border-l-8 border-indigo-100 pl-8">
-                      "{report.summary}"
-                    </p>
-                  </div>
                   
-                  <div className="space-y-8 relative z-10">
+                  <div className="grid gap-8">
                     {report.bugs?.map((bug, i) => (
-                      <div key={i} className="p-10 bg-slate-50 rounded-[2.5rem] border border-slate-100 hover:border-indigo-300 hover:bg-white transition-all duration-500 group">
-                        <div className="flex flex-col md:flex-row justify-between items-start mb-8 gap-6">
+                      <div key={i} className="bg-white p-10 rounded-[3rem] border border-slate-200 shadow-xl hover:shadow-2xl transition-all duration-500 group relative overflow-hidden">
+                        <div className="flex flex-col md:flex-row justify-between items-start mb-8 gap-6 relative z-10">
                           <div className="space-y-3">
                             <div className="flex items-center gap-2">
-                              <span className="p-1.5 bg-white rounded-lg border border-slate-200 text-indigo-600 uppercase text-[9px] font-black tracking-widest flex items-center gap-2">
-                                <Info className="w-3 h-3" /> {bug.type}
-                              </span>
+                              <span className="p-1.5 bg-indigo-50 rounded-lg text-indigo-600 uppercase text-[10px] font-black tracking-widest">{bug.type}</span>
+                              <div className="w-1 h-1 bg-slate-200 rounded-full"></div>
+                              <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">ID: AUDIT_00{bug.id}</span>
                             </div>
-                            <h3 className="text-2xl font-black text-slate-900 group-hover:text-indigo-600 transition-colors">{bug.title}</h3>
+                            <h3 className="text-3xl font-black text-slate-900 group-hover:text-indigo-600 transition-colors tracking-tight">{bug.title}</h3>
                           </div>
-                          <span className={`px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest border-2 ${getSeverityStyles(bug.severity)}`}>
+                          <span className={`px-8 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest border-2 ${getSeverityStyles(bug.severity)}`}>
                             {bug.severity} Risk
                           </span>
                         </div>
                         
-                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 relative z-10">
                           <div className="space-y-6">
                             <div>
-                              <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Vulnerability Detail</h4>
-                              <p className="text-slate-600 leading-relaxed font-medium text-md">{bug.description}</p>
+                              <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Vulnerability Insight</h4>
+                              <p className="text-slate-600 leading-relaxed font-medium text-lg">{bug.description}</p>
                             </div>
                             
-                            <div className="space-y-4">
-                              <div className="bg-indigo-50/50 p-5 rounded-2xl border border-indigo-100">
-                                <h4 className="text-[10px] font-black text-indigo-600 uppercase tracking-widest mb-2 flex items-center gap-2">
-                                  <ShieldCheck className="w-3 h-3" /> Industry Benchmark Reference
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              <div className="bg-indigo-50/50 p-5 rounded-3xl border border-indigo-100">
+                                <h4 className="text-[9px] font-black text-indigo-600 uppercase tracking-widest mb-2 flex items-center gap-2">
+                                  <ShieldCheck className="w-3 h-3" /> Benchmark Ref
                                 </h4>
-                                <p className="text-xs text-indigo-800 font-bold italic">{bug.benchmarkReference}</p>
+                                <p className="text-[11px] text-indigo-800 font-bold italic">{bug.benchmarkReference}</p>
                               </div>
-                              <div className="bg-slate-100 p-5 rounded-2xl border border-slate-200">
-                                <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2 flex items-center gap-2">
-                                  <Eye className="w-3 h-3" /> AI Verification Method
+                              <div className="bg-slate-50 p-5 rounded-3xl border border-slate-100">
+                                <h4 className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2 flex items-center gap-2">
+                                  <Eye className="w-3 h-3" /> Analysis Method
                                 </h4>
-                                <p className="text-[10px] text-slate-600 font-medium">{bug.verificationMethod}</p>
+                                <p className="text-[11px] text-slate-600 font-medium">{bug.verificationMethod}</p>
                               </div>
                             </div>
                           </div>
                           
                           <div className="space-y-4">
-                            <h4 className="text-[10px] font-black text-indigo-500 uppercase tracking-widest">Remediation Script (Hardened)</h4>
-                            <div className="bg-slate-900 text-indigo-300 p-6 rounded-3xl font-mono text-[11px] whitespace-pre-wrap border border-slate-800 shadow-2xl leading-relaxed">
+                            <div className="flex items-center justify-between">
+                               <h4 className="text-[10px] font-black text-indigo-500 uppercase tracking-widest">Security Remediation Script</h4>
+                               <Terminal className="w-4 h-4 text-slate-300" />
+                            </div>
+                            <div className="bg-slate-900 text-indigo-300 p-8 rounded-[2rem] font-mono text-xs whitespace-pre-wrap border border-slate-800 shadow-2xl leading-relaxed relative group/code overflow-x-auto">
                               {bug.fix}
                             </div>
                           </div>
@@ -417,10 +407,10 @@ const App = () => {
         <div className="max-w-7xl mx-auto px-6 text-center">
           <div className="flex items-center justify-center gap-3 mb-4 opacity-40">
             <Bug className="w-6 h-6" />
-            <span className="font-black text-lg">BugEye AI x Hardened Security</span>
+            <span className="font-black text-lg">BugEye AI v2.5 Hardened</span>
           </div>
-          <p className="text-xs font-black text-slate-300 uppercase tracking-[0.3em]">
-            Benchmarked against Google, Meta & X Infrastructure
+          <p className="text-xs font-black text-slate-300 uppercase tracking-[0.4em]">
+            Benchmarked against Google, Meta & X Global Infrastructure
           </p>
         </div>
       </footer>
